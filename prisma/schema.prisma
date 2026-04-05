@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  dailyBudget  Float     @default(5.0) @map("daily_budget")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  apiCalls     ApiCall[]
+
+  @@map("users")
+}
+
+model ApiCall {
+  id                Int     @id @default(autoincrement())
+  userId            Int     @map("user_id")
+  model             String  @default("")
+  inputTokens       Int     @default(0) @map("input_tokens")
+  outputTokens      Int     @default(0) @map("output_tokens")
+  cacheCreateTokens Int     @default(0) @map("cache_create_tokens")
+  cacheReadTokens   Int     @default(0) @map("cache_read_tokens")
+  cost              Float   @default(0)
+  timestamp         String  @default("")
+  sessionId         String  @default("") @map("session_id")
+  project           String  @default("")
+  isAgent           Boolean @default(false) @map("is_agent")
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, timestamp])
+  @@map("api_calls")
+}
