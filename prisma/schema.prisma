@@ -14,6 +14,7 @@ model User {
   passwordHash String    @map("password_hash")
   dailyBudget  Float     @default(5.0) @map("daily_budget")
   createdAt    DateTime  @default(now()) @map("created_at")
+  syncToken    String?   @unique @map("sync_token")
   apiCalls     ApiCall[]
 
   @@map("users")

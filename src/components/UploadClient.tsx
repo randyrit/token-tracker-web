@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function UploadClient() {
@@ -10,6 +10,28 @@ export default function UploadClient() {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [syncToken, setSyncToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sync/token").then((r) => r.json()).then((d) => setSyncToken(d.token));
+  }, []);
+
+  async function generateToken() {
+    setTokenLoading(true);
+    const res = await fetch("/api/sync/token", { method: "POST" });
+    const data = await res.json();
+    setSyncToken(data.token);
+    setTokenLoading(false);
+  }
+
+  function copyCommand() {
+    const cmd = `curl -sL ${window.location.origin}/sync.py | python3 - ${syncToken}`;
+    navigator.clipboard.writeText(cmd);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const valid = Array.from(incoming).filter(
@@ -46,12 +68,72 @@ export default function UploadClient() {
     <div className="max-w-[720px] mx-auto px-7 py-12 relative z-10">
       <h1 className="text-2xl font-bold mb-1.5 tracking-tight">Link Your Claude Data</h1>
       <p className="text-[0.88rem] text-text-secondary mb-8">
-        Upload your Claude Code session files to see your usage dashboard.
+        Connect your machine to automatically sync your Claude Code usage.
       </p>
 
-      {/* Upload form */}
+      {/* === SYNC COMMAND (Primary) === */}
+      <div className="bg-bg-surface border border-border-subtle rounded-xl p-7 mb-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent" />
+        <div className="flex items-start gap-4 mb-5">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-400 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(52,211,153,0.2)]">
+            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-none stroke-white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 11l5 5 5-5M12 4v12" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-base font-semibold mb-1">Sync from Terminal</h2>
+            <p className="text-[0.78rem] text-text-tertiary">
+              Run this command on any machine with Claude Code installed. It reads your local session data and syncs it here.
+            </p>
+          </div>
+        </div>
+
+        {syncToken ? (
+          <>
+            <div className="bg-bg-deep rounded-lg p-4 font-mono text-[0.72rem] text-emerald-400 leading-relaxed break-all select-all">
+              curl -sL {typeof window !== "undefined" ? window.location.origin : ""}/sync.py | python3 - {syncToken}
+            </div>
+            <div className="flex items-center justify-between mt-3">
+              <button
+                onClick={copyCommand}
+                className="text-[0.75rem] font-medium px-4 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/15 transition-all"
+              >
+                {copied ? "Copied!" : "Copy Command"}
+              </button>
+              <button
+                onClick={generateToken}
+                disabled={tokenLoading}
+                className="text-[0.72rem] text-text-tertiary hover:text-text-secondary transition-colors"
+              >
+                Regenerate token
+              </button>
+            </div>
+            <div className="mt-4 text-[0.7rem] text-text-tertiary leading-relaxed">
+              <strong className="text-text-secondary">Works on:</strong> macOS, Linux, Windows (WSL/PowerShell with Python).
+              Re-run anytime to sync latest data. Set up a cron job for automatic syncing.
+            </div>
+          </>
+        ) : (
+          <button
+            onClick={generateToken}
+            disabled={tokenLoading}
+            className="w-full py-3 text-[0.88rem] font-semibold rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-400 text-white cursor-pointer transition-all hover:shadow-[0_0_16px_rgba(52,211,153,0.25)] hover:-translate-y-0.5 disabled:opacity-50"
+          >
+            {tokenLoading ? "Generating..." : "Generate Sync Command"}
+          </button>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="flex items-center gap-4 my-6">
+        <div className="flex-1 h-px bg-border-subtle" />
+        <span className="text-[0.7rem] text-text-tertiary uppercase tracking-wider">or upload manually</span>
+        <div className="flex-1 h-px bg-border-subtle" />
+      </div>
+
+      {/* === FILE UPLOAD (Secondary) === */}
       <div
-        className={`bg-bg-surface border-2 border-dashed rounded-xl p-12 text-center transition-all cursor-pointer ${
+        className={`bg-bg-surface border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer ${
           dragOver ? "border-violet-500 bg-violet-500/5 shadow-[0_0_20px_rgba(139,92,246,0.15)]" : "border-border-dim"
         }`}
         onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -64,30 +146,24 @@ export default function UploadClient() {
         }}
         onClick={() => fileInputRef.current?.click()}
       >
-        <svg viewBox="0 0 48 48" className="w-12 h-12 mx-auto mb-4 stroke-violet-400 fill-none" strokeWidth={1.5}>
+        <svg viewBox="0 0 48 48" className="w-10 h-10 mx-auto mb-3 stroke-violet-400 fill-none" strokeWidth={1.5}>
           <path d="M24 6v28M14 16l10-10 10 10" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M40 32v6a4 4 0 01-4 4H12a4 4 0 01-4-4v-6" strokeLinecap="round" />
         </svg>
-        <div className="text-base font-semibold mb-1.5">Drop session files here</div>
-        <div className="text-[0.8rem] text-text-tertiary mb-4">
-          .jsonl files or a .zip of your ~/.claude/projects/ folder
+        <div className="text-[0.9rem] font-semibold mb-1">Drop .jsonl or .zip files</div>
+        <div className="text-[0.75rem] text-text-tertiary">
+          From ~/.claude/projects/ (macOS/Linux) or C:\Users\you\.claude\projects\ (Windows)
         </div>
-        <span className="inline-block text-[0.78rem] font-semibold px-5 py-2 rounded-md bg-bg-elevated border border-border-dim text-violet-300 hover:border-violet-500 transition-all">
-          Browse Files
-        </span>
         <input
           ref={fileInputRef}
           type="file"
           multiple
           accept=".jsonl,.zip"
           className="hidden"
-          onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
-          }}
+          onChange={(e) => { if (e.target.files) addFiles(e.target.files); }}
         />
       </div>
 
-      {/* File list */}
       {files.length > 0 && (
         <div className="mt-4 space-y-1.5">
           {files.map((f, i) => (
@@ -95,12 +171,7 @@ export default function UploadClient() {
               <span className="text-text-secondary">{f.name}</span>
               <div className="flex items-center gap-3">
                 <span className="text-text-tertiary">{(f.size / 1024).toFixed(1)} KB</span>
-                <button
-                  className="text-rose-400 hover:text-rose-300"
-                  onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, j) => j !== i)); }}
-                >
-                  x
-                </button>
+                <button className="text-rose-400 hover:text-rose-300" onClick={(e) => { e.stopPropagation(); setFiles((prev) => prev.filter((_, j) => j !== i)); }}>x</button>
               </div>
             </div>
           ))}
@@ -114,27 +185,11 @@ export default function UploadClient() {
         </div>
       )}
 
-      {/* Status */}
       {status && (
-        <div
-          className={`mt-3 font-mono text-[0.72rem] px-4 py-2.5 rounded-lg ${
-            status.type === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-400/10 text-rose-400"
-          }`}
-        >
+        <div className={`mt-3 font-mono text-[0.72rem] px-4 py-2.5 rounded-lg ${status.type === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-400/10 text-rose-400"}`}>
           {status.msg}
         </div>
       )}
-
-      {/* Instructions */}
-      <div className="bg-bg-surface border border-border-subtle rounded-xl p-6 mt-6">
-        <h3 className="text-[0.82rem] font-semibold text-text-secondary mb-3">Where to find your session files</h3>
-        <ol className="list-decimal pl-5 text-[0.78rem] text-text-tertiary space-y-1.5 leading-relaxed">
-          <li><strong>macOS / Linux:</strong> <code className="font-mono text-[0.72rem] bg-bg-deep px-2 py-0.5 rounded text-violet-300">~/.claude/projects/</code></li>
-          <li><strong>Windows:</strong> <code className="font-mono text-[0.72rem] bg-bg-deep px-2 py-0.5 rounded text-violet-300">C:\Users\&lt;you&gt;\.claude\projects\</code></li>
-          <li>Zip the entire <code className="font-mono text-[0.72rem] bg-bg-deep px-2 py-0.5 rounded text-violet-300">projects</code> folder and upload the .zip</li>
-          <li>Or select individual <code className="font-mono text-[0.72rem] bg-bg-deep px-2 py-0.5 rounded text-violet-300">.jsonl</code> session files</li>
-        </ol>
-      </div>
 
       {/* Clear data */}
       <div className="mt-8 pt-6 border-t border-border-subtle flex items-center justify-between">
